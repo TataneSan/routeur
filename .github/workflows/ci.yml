@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -e '.[fast,dev]'
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Compile Python sources
+        run: python -m compileall -q routeur scripts modal_train.py
+      - name: Smoke-test the promoted artifact
+        run: >-
+          python -m routeur.cli route
+          --model-dir models/fast-router-v3
+          --prompt "Debug this Python production timeout"
