@@ -9,13 +9,15 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import hf_hub_download
-
 from routeur.io import read_jsonl, write_jsonl
 from routeur.tasks import infer_task
 
 
 def download(repo: str, filename: str, cache_dir: Path) -> Path:
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as exc:
+        raise RuntimeError("Install routeur[train] to download public datasets") from exc
     return Path(
         hf_hub_download(
             repo_id=repo,
