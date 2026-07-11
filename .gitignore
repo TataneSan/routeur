@@ -6,6 +6,7 @@ artifacts/
 *.egg-info/
 .agents/
 .codex/
+tmp/
 
 # Generated or redistributed datasets are rebuilt from their upstream sources.
 data/*.jsonl

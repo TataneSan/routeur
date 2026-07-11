@@ -1,0 +1,27 @@
+{
+  "model": "semantic-router-v1",
+  "validation": {
+    "count": 1585,
+    "kind": "teacher_gold_model_selection_validation",
+    "exact_accuracy": 0.5123028391167193,
+    "adjacent_accuracy": 0.9337539432176656,
+    "underroute_rate": 0.15709779179810726,
+    "severe_underroute_rate": 0.013249211356466877,
+    "overroute_rate": 0.3305993690851735,
+    "task_accuracy": 0.6182965299684543,
+    "cost_ratio_vs_oracle": 1.1275663328995245,
+    "savings_vs_always_level_5": 0.8809561864703821
+  },
+  "mmr_disjoint_diagnostic": {
+    "count": 3000,
+    "exact_accuracy": 0.37466666666666665,
+    "adjacent_accuracy": 0.5616666666666666,
+    "severe_underroute_rate": 0.3433333333333333,
+    "note": "MMR levels use observed weak-versus-strong model score gaps and are not directly comparable with teacher-gold levels."
+  },
+  "latency": {
+    "protocol": "1000 unique uncached prompts, 20 warmups, one ONNX Runtime thread",
+    "local_xeon_e3_1271_v3_p95_ms": 4.75590365,
+    "hetzner_xeon_e5_1650_v3_p95_ms": 3.6181315
+  }
+}

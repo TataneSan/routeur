@@ -1,0 +1,16 @@
+{
+  "architecture": "quantized_onnx_multitask_transformer_v1",
+  "base_model": "google/bert_uncased_L-2_H-128_A-2",
+  "capabilities": ["vision", "coding", "reasoning", "web_search", "tool_use", "long_context", "multilingual", "creative", "safety"],
+  "confidence_threshold": 0.4,
+  "input_prefix": "",
+  "levels": [1, 2, 3, 4, 5],
+  "max_length": 128,
+  "model_file": "model.int8.onnx",
+  "quantization": "dynamic_int8_qint8_per_channel_reduce_range",
+  "risks": ["low", "medium", "high"],
+  "safety_bump": 1,
+  "safety_guard_mode": "off",
+  "tasks": ["general", "frontend", "backend", "coding", "reasoning", "research", "writing", "data", "safety", "vision", "agentic"],
+  "temperature": 1.0
+}

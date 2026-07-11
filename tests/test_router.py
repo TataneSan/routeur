@@ -1,3 +1,5 @@
+from typing import Any
+
 from routeur.heuristics import heuristic_level
 from routeur.router import HeuristicRouter, load_router
 

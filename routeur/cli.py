@@ -5,7 +5,6 @@ import json
 import sys
 from pathlib import Path
 
-from .heuristics import heuristic_level
 from .io import read_jsonl, write_jsonl
 from .labels import label_trace_row
 from .metrics import routing_metrics
@@ -26,7 +25,11 @@ def cmd_label(args: argparse.Namespace) -> int:
 
 
 def cmd_route(args: argparse.Namespace) -> int:
-    router = load_router(args.model_dir, policy_path=args.policy)
+    router = load_router(
+        args.model_dir,
+        policy_path=args.policy,
+        safety_guard_mode=args.safety_guard_mode,
+    )
     decision = router.route(args.prompt)
     print(json.dumps(decision.to_json(), ensure_ascii=False, indent=2, sort_keys=True))
     return 0
@@ -35,11 +38,15 @@ def cmd_route(args: argparse.Namespace) -> int:
 def cmd_eval(args: argparse.Namespace) -> int:
     rows = [RouterExample.from_json(row) for row in read_jsonl(args.dataset)]
     if args.model_dir:
-        router = load_router(args.model_dir, policy_path=args.policy)
-        decisions = [router.route(row.prompt) for row in rows]
+        router = load_router(
+            args.model_dir,
+            policy_path=args.policy,
+            safety_guard_mode=args.safety_guard_mode,
+        )
+        decisions = router.route_batch([row.prompt for row in rows])
     else:
         router = load_router(None, policy_path=args.policy)
-        decisions = [router.route(row.prompt) for row in rows]
+        decisions = router.route_batch([row.prompt for row in rows])
     predictions = [decision.level for decision in decisions]
     metrics = routing_metrics([row.level for row in rows], predictions)
     task_correct = [decision.task == row.task for decision, row in zip(decisions, rows, strict=True)]
@@ -74,12 +81,23 @@ def build_parser() -> argparse.ArgumentParser:
     route.add_argument("--prompt", required=True)
     route.add_argument("--model-dir", type=Path, default=None, help="Trained model directory. Omit for heuristic router.")
     route.add_argument("--policy", type=Path, default=None, help="Optional model policy JSON file.")
+    route.add_argument(
+        "--safety-guard-mode",
+        choices=("off", "model_confirmed", "lexical"),
+        default=None,
+        help="Optional safety override. The artifact default is cost-optimized.",
+    )
     route.set_defaults(func=cmd_route)
 
     evaluate = sub.add_parser("eval", help="Evaluate router against labelled JSONL data.")
     evaluate.add_argument("--dataset", required=True, type=Path)
     evaluate.add_argument("--model-dir", type=Path, default=None, help="Trained model directory. Omit for heuristic baseline.")
     evaluate.add_argument("--policy", type=Path, default=None, help="Optional model policy JSON file.")
+    evaluate.add_argument(
+        "--safety-guard-mode",
+        choices=("off", "model_confirmed", "lexical"),
+        default=None,
+    )
     evaluate.set_defaults(func=cmd_eval)
 
     seed = sub.add_parser("seed", help="Generate a deterministic starter dataset for smoke tests.")

@@ -1,0 +1,11 @@
+{
+  "architecture": "multitask_hybrid_pool",
+  "base_model": "google/bert_uncased_L-4_H-256_A-4",
+  "num_tasks": 11,
+  "num_capabilities": 9,
+  "num_risks": 3,
+  "pooling": "hybrid",
+  "num_levels": 5,
+  "capability_loss_weight": 0.15,
+  "risk_loss_weight": 0.1
+}

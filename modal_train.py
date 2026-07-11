@@ -9,6 +9,7 @@ from typing import Any
 
 import modal
 
+from routeur.calibration import calibrated_levels
 from routeur.metrics import SCORING_WEIGHTS
 
 APP_NAME = "routeur-trainer"
@@ -62,33 +63,6 @@ def _optimize_temperature(level_logits: Any, level_labels: list[int]) -> float:
     return best_temperature
 
 
-def _calibrated_levels(
-    probabilities: Any,
-    threshold: float,
-    bump: int,
-    risk_preds: list[int] | None = None,
-) -> list[int]:
-    """Apply the same confidence bump used in production by TransformerRouter.
-
-    In production the bump is only applied when the predicted risk is high,
-    so the calibration loop must mirror that behaviour.
-    """
-    import numpy as np
-
-    high_risk_index = RISKS.index("high")
-    raw = np.asarray(probabilities)
-    raw_pred = raw.argmax(axis=1)
-    confidence = raw.max(axis=1)
-    predictions: list[int] = []
-    for index, (level, conf) in enumerate(zip(raw_pred, confidence, strict=True)):
-        raw_level = int(level) + 1
-        effective_threshold = min(float(threshold), 0.55) if raw_level <= 2 else float(threshold)
-        high_risk = risk_preds is None or risk_preds[index] == high_risk_index
-        routed = min(4, int(level) + int(bump)) if high_risk and float(conf) < effective_threshold else int(level)
-        predictions.append(routed + 1)
-    return predictions
-
-
 def _calibrate_policy(
     y_true: list[int],
     probabilities: Any,
@@ -104,7 +78,7 @@ def _calibrate_policy(
         for bump in (0, 1):
             metrics = routing_metrics(
                 y_true,
-                _calibrated_levels(probabilities, float(threshold), bump, risk_preds),
+                calibrated_levels(probabilities, float(threshold), bump, risk_preds),
                 level_costs=costs,
             )
             objective = (
@@ -564,7 +538,6 @@ def _train_impl(
         task_true: list[int] = []
         task_pred: list[int] = []
         level_logits_list: list[Any] = []
-        level_probs: list[Any] = []
         risk_true: list[int] = []
         risk_pred: list[int] = []
         capability_true: list[list[int]] = []
@@ -585,7 +558,6 @@ def _train_impl(
                 level_pred.extend((outputs["level_logits"].argmax(dim=-1) + 1).cpu().tolist())
                 task_true.extend(batch["task_labels"].cpu().tolist())
                 task_pred.extend(outputs["task_logits"].argmax(dim=-1).cpu().tolist())
-                level_probs.extend(level_prob.cpu().tolist())
                 risk_pred.extend(outputs["risk_logits"].argmax(dim=-1).cpu().tolist())
                 gold_risk = batch["risk_weights"] >= 0.75
                 if gold_risk.any():
@@ -751,7 +723,12 @@ def _train_impl(
         calibrated_bump = safety_bump
     business_metrics = routing_metrics(
         y_true,
-        _calibrated_levels(probabilities, calibrated_threshold, calibrated_bump, risk_preds=evaluation.get("risk_pred")),
+        calibrated_levels(
+            probabilities,
+            calibrated_threshold,
+            calibrated_bump,
+            risk_preds=evaluation.get("risk_pred"),
+        ),
         level_costs=costs,
     )
     model.save_pretrained(model_dir, base_model=base_model)

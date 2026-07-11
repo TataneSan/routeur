@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,7 @@ from .capabilities import CAPABILITIES, RISKS, infer_capabilities
 from .heuristics import heuristic_level
 from .io import read_json
 from .policy import ModelPolicy
-from .schema import MAX_LEVEL, MIN_LEVEL, normalize_level
+from .schema import MAX_LEVEL, normalize_level
 from .tasks import TASKS, infer_task, normalize_task
 
 
@@ -388,14 +387,21 @@ class FastRouter(PromptRouter):
         *,
         policy_path: str | Path | None = None,
         cache_size: int = 1024,
+        safety_guard_mode: str | None = None,
         telemetry_callback: Any | None = None,
     ) -> None:
         from .fast_model import FastModelArtifact
 
         self.artifact = FastModelArtifact(model_dir)
+        self.model_reason = "fast_model"
         self.policy = ModelPolicy(policy_path, candidate_limit=20)
         self.confidence_threshold = float(self.artifact.config.get("confidence_threshold", 0.0))
         self.safety_bump = int(self.artifact.config.get("safety_bump", 0))
+        self.safety_guard_mode = str(
+            safety_guard_mode
+            if safety_guard_mode is not None
+            else self.artifact.config.get("safety_guard_mode", "lexical")
+        )
         self._cache: dict[str, RouteDecision] = {}
         self._cache_size = max(1, int(cache_size))
         self._cache_order: list[str] = []
@@ -462,15 +468,31 @@ class FastRouter(PromptRouter):
             capability: float(capability_probabilities[position])
             for position, capability in enumerate(self.artifact.capabilities)
         }
+        learned_safety_score = capability_scores.get("safety", 0.0)
         heuristic_capabilities = set(infer_capabilities(prompt, task))
         for capability in heuristic_capabilities:
             capability_scores[capability] = max(0.8, capability_scores.get(capability, 0.0))
         required_capabilities = sorted(name for name, score in capability_scores.items() if score >= 0.45)
 
         heuristic_task = infer_task(prompt)
+        safety_signal_count = sum(
+            (
+                task == "safety",
+                risk == "high",
+                learned_safety_score >= 0.45,
+            )
+        )
+        if self.safety_guard_mode == "lexical":
+            force_safety = heuristic_task == "safety"
+        elif self.safety_guard_mode == "model_confirmed":
+            force_safety = heuristic_task == "safety" and safety_signal_count >= 2
+        elif self.safety_guard_mode == "off":
+            force_safety = False
+        else:
+            raise ValueError(f"Unknown safety_guard_mode: {self.safety_guard_mode}")
         routed_level = raw_level
-        reason = "fast_model"
-        if heuristic_task == "safety":
+        reason = self.model_reason
+        if force_safety:
             task = "safety"
             task_confidence = max(task_confidence, 0.8)
             risk = "high"
@@ -481,7 +503,7 @@ class FastRouter(PromptRouter):
             reason = "safety_guard"
         elif risk == "high" and confidence < self.confidence_threshold:
             routed_level = min(MAX_LEVEL, routed_level + self.safety_bump)
-            reason = "fast_model_low_confidence_bump"
+            reason = f"{self.model_reason}_low_confidence_bump"
 
         task_scores = {
             self.artifact.tasks[position]: float(value)
@@ -491,7 +513,7 @@ class FastRouter(PromptRouter):
             task,
             normalize_level(routed_level),
             confidence=confidence,
-            safety=heuristic_task == "safety",
+            safety=force_safety,
             task_scores=task_scores,
             capability_scores=capability_scores,
             risk=risk,
@@ -515,9 +537,47 @@ class FastRouter(PromptRouter):
         )
 
 
-def load_router(model_dir: str | Path | None, *, policy_path: str | Path | None = None) -> PromptRouter:
+class OnnxRouter(FastRouter):
+    """Quantized semantic router served through ONNX Runtime on CPU."""
+
+    def __init__(
+        self,
+        model_dir: str | Path,
+        *,
+        policy_path: str | Path | None = None,
+        cache_size: int = 1024,
+        safety_guard_mode: str | None = None,
+        telemetry_callback: Any | None = None,
+    ) -> None:
+        from .onnx_model import OnnxModelArtifact
+
+        self.artifact = OnnxModelArtifact(model_dir)
+        self.model_reason = "onnx_model"
+        self.policy = ModelPolicy(policy_path, candidate_limit=20)
+        self.confidence_threshold = float(self.artifact.config.get("confidence_threshold", 0.0))
+        self.safety_bump = int(self.artifact.config.get("safety_bump", 0))
+        self.safety_guard_mode = str(
+            safety_guard_mode
+            if safety_guard_mode is not None
+            else self.artifact.config.get("safety_guard_mode", "off")
+        )
+        self._cache = {}
+        self._cache_size = max(1, int(cache_size))
+        self._cache_order = []
+        self._cache_lock = threading.Lock()
+        self._telemetry_callback = telemetry_callback
+
+
+def load_router(
+    model_dir: str | Path | None,
+    *,
+    policy_path: str | Path | None = None,
+    safety_guard_mode: str | None = None,
+) -> PromptRouter:
     if model_dir is None:
         return HeuristicRouter(policy_path=policy_path)
     if (Path(model_dir) / "fast_router.json").exists():
-        return FastRouter(model_dir, policy_path=policy_path)
+        return FastRouter(model_dir, policy_path=policy_path, safety_guard_mode=safety_guard_mode)
+    if (Path(model_dir) / "onnx_router.json").exists():
+        return OnnxRouter(model_dir, policy_path=policy_path, safety_guard_mode=safety_guard_mode)
     return TransformerRouter(model_dir, policy_path=policy_path)

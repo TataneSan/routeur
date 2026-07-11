@@ -5,10 +5,12 @@ live catalog instead of returning only an abstract tier. It predicts difficulty,
 task, risk, and required capabilities, then ranks callable models using public
 Arena/LMArena priors, capability coverage, and relative cost.
 
-The repository ships two routing paths:
+The repository ships three routing paths:
 
-- `FastRouter`: a portable 52 MB linear multi-task model with word and character
-  n-grams. It is the default production path and runs below 10 ms on an old CPU.
+- `OnnxRouter`: the promoted semantic path, available as a 5 MB economy model
+  and a 12 MB accuracy model. Both are INT8 CPU artifacts below the 10 ms p95 SLO.
+- `FastRouter`: a portable 52 MB linear multi-task baseline with word and
+  character n-grams.
 - `TransformerRouter`: a higher-capacity multilingual encoder used for offline
   experiments and accuracy comparisons when a 100+ ms CPU budget is acceptable.
 
@@ -17,44 +19,47 @@ primary decision is `model`, with ranked fallbacks in `model_candidates`.
 
 ## Measured results
 
-The promoted `models/fast-router-v3` artifact was trained on 49,984 unique prompts.
-Its validation split is held out exclusively from high-confidence teacher-labeled
-examples; exact normalized prompts are removed from training.
+The semantic students were trained on 49,984 unique prompts. The validation split
+contains only teacher-labelled examples whose normalized prompts are excluded from
+training. It is a validation set used for model selection, not an untouched test set.
 
-| Metric | Fast v2 | Fast v3 | Change |
+| Metric | Linear baseline | Economy ONNX | Accuracy ONNX |
 |---|---:|---:|---:|
-| Gold exact level accuracy | 0.4751 | **0.4839** | +0.0088 |
-| Gold adjacent accuracy | 0.9091 | **0.9192** | +0.0101 |
-| Severe under-routing | 0.0372 | **0.0278** | -0.0095 |
-| Task accuracy | 0.5703 | **0.5950** | +0.0246 |
-| Risk accuracy | 0.7199 | **0.7356** | +0.0158 |
-| Savings vs always tier 5 | 0.8804 | **0.8898** | +0.0093 |
-| MMR unseen-turn accuracy | 0.1287 | **0.3280** | +0.1993 |
-| MMR unseen-turn task accuracy | 0.5673 | **0.7497** | +0.1823 |
+| Exact level accuracy | 0.4839 | 0.4915 | **0.5123** |
+| Adjacent accuracy | 0.9192 | 0.9268 | **0.9338** |
+| Severe under-routing | 0.0278 | 0.0158 | **0.0132** |
+| Task accuracy | 0.5950 | 0.5830 | **0.6183** |
+| Savings vs always tier 5 | 0.8898 | **0.8907** | 0.8810 |
+| Cost ratio vs labelled oracle | - | **1.0357** | 1.1276 |
+| Artifact size | 52 MB | **5 MB** | 12 MB |
 
-On an Intel Xeon E3-1271 v3, 1,000 uncached single-prompt decisions measured:
-
-- median: **1.85 ms**
-- p95: **2.97 ms**
-- p99: **3.77 ms**
-- maximum: 11.10 ms
-
-The same 1,000-request protocol on the Hetzner Xeon E5-1650 v3 server measured
-**1.73 ms median** and **1.89 ms p95**.
+In 1,000-request uncached, single-prompt runs, economy/accuracy p95 latency was
+2.84/4.76 ms on a local Xeon E3-1271 v3 and 1.61/3.62 ms on a Hetzner Xeon
+E5-1650 v3. Measurements were sequential with one ONNX Runtime thread.
 
 The enforced service objective is p95 below 10 ms. The former XLM-R path measured
-112.3 ms median on the same machine. See `models/fast-router-v3/evaluation.json`
-for the machine-readable report and limitations.
+112.3 ms median on the same machine. `models/profiles.json` is the machine-readable
+profile comparison.
+
+Exact, under-route, and over-route rates partition all decisions. Requiring both
+under-routing and over-routing below 0.1% therefore requires at least 99.8% exact
+accuracy. The current subjective teacher labels do not support that claim: even
+high-confidence rows contain boundary disagreement. The repository reports the
+measured ceiling instead of tuning on validation labels or manufacturing a score.
+
+The full architecture, training procedure, cost analysis, and limitations are in
+[`paper/routeur_paper.tex`](paper/routeur_paper.tex) and the compiled
+[`output/pdf/routeur_paper.pdf`](output/pdf/routeur_paper.pdf).
 
 ## Quick start
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -e '.[fast,dev]'
+pip install -e '.[onnx,dev]'
 
 routeur route \
-  --model-dir models/fast-router-v3 \
+  --model-dir models/semantic-router-v1 \
   --prompt "Debug this Python production timeout"
 ```
 
@@ -70,12 +75,14 @@ Example output fields:
   "risk": "medium",
   "required_capabilities": ["coding", "reasoning"],
   "confidence": 0.62,
-  "reason": "fast_model"
+  "reason": "onnx_model"
 }
 ```
 
-The explicit lexical safety guard overrides learned predictions for high-stakes
-security prompts and routes them to level 5.
+Use `models/semantic-router-tiny-v1` for the lowest cost and smallest artifact.
+The default relies on the learned risk, safety, and capability heads. Applications
+can enable `--safety-guard-mode model_confirmed` or `lexical`; both deliberately
+trade higher cost and over-routing for conservative escalation.
 
 ## Verify latency
 
@@ -85,7 +92,7 @@ router's LRU cache:
 ```bash
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 python scripts/benchmark_latency.py \
-  --model-dir models/fast-router-v3 \
+  --model-dir models/semantic-router-v1 \
   --iterations 1000 \
   --max-p95-ms 10
 ```
@@ -154,21 +161,27 @@ pip install -e '.[train,modal]'
 modal run modal_train.py \
   --dataset data/router_train_v4_mmr.jsonl \
   --profile h100 \
-  --base-model intfloat/multilingual-e5-large-instruct \
-  --run-name router-e5-experiment \
-  --epochs 4 \
-  --batch-size 16 \
-  --gradient-accumulation-steps 2
+  --base-model google/bert_uncased_L-4_H-256_A-4 \
+  --run-name semantic-router-v1 \
+  --epochs 6 \
+  --batch-size 128 \
+  --max-length 128
 ```
 
 Available profiles are `economical` (`L4` -> `A10` -> `T4`), `balanced`, `h100`,
 and `max`. Training artifacts are stored in the Modal volume `routeur-artifacts`
 under `/runs/<run-name>/`.
 
-The Transformer path is intentionally not promoted for latency-sensitive serving:
-the best E5 experiment reached 0.5785 exact level accuracy on the teacher holdout,
-but its encoder is hundreds of millions of parameters and does not meet the CPU
-10 ms objective.
+After downloading the selected Modal checkpoint, export and quantize it with:
+
+```bash
+python scripts/export_onnx_router.py \
+  --model-dir artifacts/semantic-router-v1/model \
+  --output-dir models/semantic-router-v1
+```
+
+Larger E5 and six-layer MiniLM experiments were rejected because they missed the
+CPU latency objective or failed to improve the measured Pareto frontier.
 
 ## Data and trace labels
 
