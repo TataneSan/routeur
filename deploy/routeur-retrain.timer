@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly LMArena-aware prompt router refresh
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=30m
+Unit=routeur-retrain.service
+
+[Install]
+WantedBy=timers.target

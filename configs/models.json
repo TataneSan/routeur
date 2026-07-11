@@ -1,0 +1,74 @@
+{
+  "notes": {
+    "policy": "Benchmark-informed defaults, to be recalibrated with the platform's own traces.",
+    "frontend": "Claude Opus leads current WebDev Arena style evaluations; GPT remains a strong alternative.",
+    "backend": "GPT/Codex is preferred for repository, terminal, tool-calling and multi-file backend work.",
+    "reasoning": "GPT thinking and Claude Opus are both frontier; GPT is the default for math/science, Opus for research-heavy work."
+  },
+  "models": [
+    {
+      "id": "anthropic/claude-opus-latest",
+      "provider": "anthropic",
+      "ideal_level": 5,
+      "min_level": 4,
+      "relative_cost": 5.0,
+      "specialties": {"frontend": 1.0, "backend": 0.82, "coding": 0.92, "reasoning": 0.94, "research": 1.0, "writing": 0.95, "data": 0.88, "safety": 0.96, "general": 0.94}
+    },
+    {
+      "id": "openai/gpt-5.2-codex",
+      "provider": "openai",
+      "ideal_level": 5,
+      "min_level": 4,
+      "relative_cost": 4.6,
+      "specialties": {"frontend": 0.94, "backend": 1.0, "coding": 1.0, "reasoning": 0.98, "research": 0.87, "writing": 0.86, "data": 0.95, "safety": 0.94, "general": 0.94}
+    },
+    {
+      "id": "openai/gpt-5.2",
+      "provider": "openai",
+      "ideal_level": 5,
+      "min_level": 4,
+      "relative_cost": 4.2,
+      "specialties": {"frontend": 0.92, "backend": 0.96, "coding": 0.96, "reasoning": 1.0, "research": 0.93, "writing": 0.88, "data": 0.96, "safety": 0.95, "general": 0.95}
+    },
+    {
+      "id": "Mistral:devstral-latest",
+      "provider": "mistral",
+      "ideal_level": 4,
+      "min_level": 3,
+      "relative_cost": 1.8,
+      "specialties": {"frontend": 0.72, "backend": 0.9, "coding": 0.93, "reasoning": 0.68, "research": 0.56, "writing": 0.62, "data": 0.8, "safety": 0.5, "general": 0.72}
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro",
+      "provider": "deepseek",
+      "ideal_level": 4,
+      "min_level": 3,
+      "relative_cost": 1.4,
+      "specialties": {"frontend": 0.62, "backend": 0.84, "coding": 0.88, "reasoning": 0.92, "research": 0.78, "writing": 0.72, "data": 0.84, "safety": 0.55, "general": 0.78}
+    },
+    {
+      "id": "moonshotai/kimi-k2.6",
+      "provider": "moonshot",
+      "ideal_level": 4,
+      "min_level": 3,
+      "relative_cost": 1.3,
+      "specialties": {"frontend": 0.7, "backend": 0.82, "coding": 0.86, "reasoning": 0.8, "research": 0.9, "writing": 0.78, "data": 0.75, "safety": 0.62, "general": 0.78}
+    },
+    {
+      "id": "Mistral:mistral-small-latest",
+      "provider": "mistral",
+      "ideal_level": 2,
+      "min_level": 1,
+      "relative_cost": 0.35,
+      "specialties": {"frontend": 0.45, "backend": 0.48, "coding": 0.5, "reasoning": 0.42, "research": 0.4, "writing": 0.82, "data": 0.55, "safety": 0.3, "general": 0.68}
+    },
+    {
+      "id": "Nvidia:meta/llama-3.2-11b-vision-instruct",
+      "provider": "nvidia",
+      "ideal_level": 2,
+      "min_level": 1,
+      "relative_cost": 0.2,
+      "specialties": {"frontend": 0.55, "backend": 0.38, "coding": 0.4, "reasoning": 0.3, "research": 0.3, "writing": 0.58, "data": 0.36, "safety": 0.25, "general": 0.5}
+    }
+  ]
+}

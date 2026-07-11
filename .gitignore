@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+artifacts/
+*.egg-info/
+.agents/
+.codex/
+
+# Generated or redistributed datasets are rebuilt from their upstream sources.
+data/*.jsonl
+data/*.json
+data/benchmarks/
+!data/example_train.jsonl
+!data/example_traces.jsonl
+
+# Local experiment models; explicitly add a promoted release artifact.
+models/fast-router-v1/
+models/fast-router-v2/

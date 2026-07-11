@@ -1,0 +1,24 @@
+{
+  "levels": {
+    "1": {
+      "description": "Very cheap and fast model for simple extraction, classification, tiny summaries, and obvious rewrites.",
+      "example_model": "small/fast"
+    },
+    "2": {
+      "description": "Low-cost general assistant for routine writing, translation, and short customer support tasks.",
+      "example_model": "mini/general"
+    },
+    "3": {
+      "description": "Balanced model for multi-step instructions, medium context, and moderate reasoning.",
+      "example_model": "standard/balanced"
+    },
+    "4": {
+      "description": "Strong model for coding, math, complex analysis, and high precision tasks.",
+      "example_model": "large/reasoning"
+    },
+    "5": {
+      "description": "Best available model for high-stakes, ambiguous, very long, or failure-sensitive prompts.",
+      "example_model": "frontier"
+    }
+  }
+}

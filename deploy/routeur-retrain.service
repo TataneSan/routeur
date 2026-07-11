@@ -1,0 +1,16 @@
+[Unit]
+Description=Continuous LMArena-aware prompt router retraining
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/routeur
+EnvironmentFile=-/root/.config/routeur/retrain.env
+ExecStart=/root/routeur/.venv/bin/python /root/routeur/scripts/continuous_retrain.py --include-wildchat --profile h100
+Nice=10
+IOSchedulingClass=best-effort
+TimeoutStartSec=24h
+
+[Install]
+WantedBy=multi-user.target

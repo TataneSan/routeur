@@ -1,0 +1,5 @@
+{"level":1,"prompt":"Summarize this short customer email in French: Bonjour, je veux annuler ma commande.","source":"example"}
+{"level":4,"prompt":"Debug this Python traceback: TypeError: unsupported operand type(s) for +: 'int' and 'str'. Explain the fix.","source":"example"}
+{"level":4,"prompt":"Prove that the sum of the first n odd integers is n squared.","source":"example"}
+{"level":2,"prompt":"Write a friendly one paragraph follow-up email after a product demo.","source":"example"}
+{"level":5,"prompt":"Review this production security patch for a possible authentication bypass.","source":"example"}

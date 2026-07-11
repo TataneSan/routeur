@@ -1,0 +1,66 @@
+{
+  "model": "fast-router-v3",
+  "evaluation_date": "2026-07-11",
+  "gold_holdout": {
+    "count": 1585,
+    "validation_kind": "held_out_teacher_gold",
+    "accuracy": 0.48391167192429024,
+    "adjacent_accuracy": 0.9192429022082019,
+    "level_macro_f1": 0.4738922199196778,
+    "mean_absolute_error": 0.6037854889589905,
+    "underroute_rate": 0.19558359621451105,
+    "severe_underroute_rate": 0.0277602523659306,
+    "overroute_rate": 0.3205047318611987,
+    "task_accuracy": 0.5949526813880126,
+    "task_macro_f1": 0.592378741425885,
+    "risk_accuracy": 0.7356466876971609,
+    "savings_vs_always_level_5": 0.8897553452506134
+  },
+  "mmr_disjoint_holdout": {
+    "count": 3000,
+    "accuracy": 0.328,
+    "adjacent_accuracy": 0.5443333333333333,
+    "task_accuracy": 0.7496666666666667,
+    "severe_underroute_rate": 0.347,
+    "note": "Levels are derived from observed 0.6B versus 30B judge-score gaps and use a different oracle from teacher-gold data."
+  },
+  "external_diagnostics": {
+    "coderouterbench_ood176": {
+      "count": 176,
+      "accuracy": 0.18181818181818182,
+      "adjacent_accuracy": 0.6193181818181818,
+      "severe_underroute_rate": 0.2556818181818182
+    },
+    "twinrouterbench": {
+      "count": 970,
+      "accuracy": 0.12783505154639174,
+      "adjacent_accuracy": 0.6175257731958763,
+      "note": "Publisher tier definitions and weak-label caveats make this a diagnostic distribution-shift result, not a directly comparable headline metric."
+    }
+  },
+  "latency": {
+    "protocol": "1000 unique uncached prompts, 20 warmups, OMP_NUM_THREADS=1, MKL_NUM_THREADS=1",
+    "local_xeon_e3_1271_v3": {
+      "mean_ms": 2.002115262,
+      "p50_ms": 1.8485885,
+      "p95_ms": 2.9708859,
+      "p99_ms": 3.76892197,
+      "max_ms": 11.102274,
+      "passed_p95_under_10ms": true
+    },
+    "hetzner_xeon_e5_1650_v3": {
+      "mean_ms": 1.729235407,
+      "p50_ms": 1.733592,
+      "p95_ms": 1.89364115,
+      "p99_ms": 2.05201838,
+      "max_ms": 2.778074,
+      "passed_p95_under_10ms": true
+    },
+    "transformer_baseline_local": {
+      "model": "xlm-roberta-base",
+      "p50_ms": 112.32386,
+      "p95_ms": 163.896865,
+      "passed_p95_under_10ms": false
+    }
+  }
+}
