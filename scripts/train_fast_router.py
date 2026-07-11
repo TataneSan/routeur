@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score, f1_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from routeur.capabilities import CAPABILITIES, RISKS, infer_capabilities, normalize_capabilities
 from routeur.fast_model import build_vectorizer, prepare_prompt
@@ -23,6 +23,13 @@ from routeur.tasks import TASKS, normalize_task
 
 def normalized_prompt(row: dict[str, Any]) -> str:
     return " ".join(str(row["prompt"]).strip().lower().split())
+
+
+def validation_group(row: dict[str, Any]) -> str:
+    metadata = row.get("metadata") or {}
+    if metadata.get("query_id"):
+        return f"{metadata.get('dataset', row.get('source', 'unknown'))}:{metadata['query_id']}"
+    return normalized_prompt(row)
 
 
 def split_rows(rows: list[dict[str, Any]], *, validation_ratio: float, seed: int):
@@ -40,6 +47,14 @@ def split_rows(rows: list[dict[str, Any]], *, validation_ratio: float, seed: int
             stratify=[row["level"] for row in rows],
         )
         return train, validation, "mixed_fallback"
+    groups = [validation_group(row) for row in gold]
+    if len(set(groups)) < len(groups):
+        splitter = GroupShuffleSplit(n_splits=1, test_size=validation_ratio, random_state=seed)
+        _train_positions, validation_positions = next(splitter.split(gold, groups=groups))
+        validation = [gold[int(position)] for position in validation_positions]
+        validation_groups = {validation_group(row) for row in validation}
+        train = [row for row in rows if validation_group(row) not in validation_groups]
+        return train, validation, "held_out_teacher_gold_grouped"
     composite = [f"{row['level']}:{normalize_task(row.get('task'))}" for row in gold]
     counts = Counter(composite)
     strata = [label if counts[label] >= 5 else f"{row['level']}:other" for row, label in zip(gold, composite)]

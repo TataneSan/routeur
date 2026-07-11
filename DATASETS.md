@@ -3,7 +3,35 @@
 Routeur separates training data from external benchmarks. Dataset builders preserve
 the upstream source name in every row and use exact normalized-prompt deduplication.
 
-## New sources added in v4
+## Objective-oracle sources added in v6
+
+### DARS repeated-generation routing data
+
+- Source: `AIGNLAI/DARS`.
+- Role: primary objective-oracle training and external test data.
+- Coverage: 90,000 train and 41,328 test generations over GPQA, MATH-500,
+  and DROP, with six candidate models, prompt rewrites, repeated decodes,
+  automatic scores, parse status, and observed cost.
+- Mapping: `scripts/build_objective_oracle.py` aggregates every observation for
+  a query-model pair. It selects the cheapest model whose one-sided lower
+  confidence bound clears the quality threshold. If none clears it, the model
+  with the strongest lower bound is selected as an explicit fallback.
+- Stability: 200 bootstrap resamples estimate whether the route level is
+  reproducible. The strict corpus retains only labels reproduced at least 99.8%
+  of the time; all other rows require adjudication and are not gold labels.
+- Leakage control: all rewrites and decodes sharing a `query_id` stay in the same
+  partition. The upstream test split never enters training.
+
+### R2-Bench model and token-budget traces
+
+- Source: `JiaqiXue/R2-Bench` (MIT).
+- Role: secondary objective-trace source and future joint model/budget training.
+- Coverage: approximately 4.35 million published evaluations spanning 30,968
+  queries, ten LLMs, and sixteen output-token budgets, with judge correctness
+  scores and actual token counts.
+- Raw size is approximately 25 GB, so the repository does not redistribute it.
+
+## Sources added in v4
 
 ### MMR multi-turn routing data
 
@@ -67,7 +95,9 @@ third-party data.
 
 1. Teacher-gold validation rows are selected before training.
 2. Every exact normalized validation prompt is removed from the full training mix.
-3. MMR holdout prompts are excluded from both the base and MMR training rows.
-4. TwinRouterBench and CodeRouterBench OOD176 never enter training.
-5. Rewrites or near-duplicates can still exist across public corpora. For high-stakes
+3. Rows sharing an objective-oracle `query_id`, including paraphrases, are split
+   as one group so a rewritten test question cannot leak into training.
+4. MMR holdout prompts are excluded from both the base and MMR training rows.
+5. TwinRouterBench and CodeRouterBench OOD176 never enter training.
+6. Rewrites or near-duplicates can still exist across unrelated public corpora. For high-stakes
    benchmarking, add semantic deduplication and source-grouped splits.

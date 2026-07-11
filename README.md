@@ -125,6 +125,28 @@ and
 See [DATASETS.md](DATASETS.md) for source roles, licenses, mapping rules, and
 leakage controls.
 
+## Build the repeated-trace objective oracle
+
+The v6 oracle replaces a verbal difficulty label with repeated, scored model
+outcomes. Download the DARS snapshot, then build cost-aware train/test labels:
+
+```bash
+hf download AIGNLAI/DARS \
+  --repo-type dataset --local-dir artifacts/dars
+
+python scripts/build_objective_oracle.py \
+  --input artifacts/dars \
+  --output-dir artifacts/dars-oracle \
+  --quality-threshold 0.8 \
+  --bootstrap-samples 200 \
+  --min-stability 0.998
+```
+
+The builder groups every rewrite and decode by query and model, uses a one-sided
+confidence bound to reject lucky single generations, and emits a strict corpus
+whose route level is reproduced in at least 99.8% of bootstrap resamples. DARS's
+upstream test queries remain external evaluation data.
+
 ## Train the fast model
 
 ```bash

@@ -116,7 +116,7 @@ def _train_impl(
     import torch
     from datasets import Dataset, load_dataset
     from sklearn.metrics import accuracy_score, f1_score
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import GroupShuffleSplit, train_test_split
     from torch.utils.data import DataLoader
     from transformers import AutoTokenizer, DataCollatorWithPadding, get_linear_schedule_with_warmup
 
@@ -143,28 +143,46 @@ def _train_impl(
         and float((row.get("metadata") or {}).get("grader_confidence", 0.0)) >= 0.65
     ]
     if len(gold_rows) >= 300:
-        composite = [f"{row['level']}:{row['task']}" for row in gold_rows]
-        composite_counts = Counter(composite)
-        candidate_strata = [
-            label if composite_counts[label] >= 5 else f"{row['level']}:other"
-            for row, label in zip(gold_rows, composite, strict=True)
-        ]
-        candidate_counts = Counter(candidate_strata)
-        validation_size = max(1, int(round(len(gold_rows) * validation_ratio)))
-        gold_strata = (
-            candidate_strata
-            if min(candidate_counts.values()) >= 2 and len(candidate_counts) <= validation_size
-            else [str(row["level"]) for row in gold_rows]
-        )
-        _gold_train, val_rows = train_test_split(
-            gold_rows,
-            test_size=validation_ratio,
-            random_state=seed,
-            stratify=gold_strata,
-        )
-        val_prompts = {str(row["prompt"]).strip().lower() for row in val_rows}
-        train_rows = [row for row in rows if str(row["prompt"]).strip().lower() not in val_prompts]
-        validation_kind = "held_out_teacher_gold"
+        def validation_group(row: dict[str, Any]) -> str:
+            metadata = row.get("metadata") or {}
+            if metadata.get("query_id"):
+                return f"{metadata.get('dataset', row.get('source', 'unknown'))}:{metadata['query_id']}"
+            return str(row["prompt"]).strip().lower()
+
+        groups = [validation_group(row) for row in gold_rows]
+        grouped_validation = len(set(groups)) < len(groups)
+        if grouped_validation:
+            splitter = GroupShuffleSplit(n_splits=1, test_size=validation_ratio, random_state=seed)
+            _train_positions, val_positions = next(splitter.split(gold_rows, groups=groups))
+            val_rows = [gold_rows[int(position)] for position in val_positions]
+            val_groups = {validation_group(row) for row in val_rows}
+            train_rows = [row for row in rows if validation_group(row) not in val_groups]
+            validation_kind = "held_out_teacher_gold_grouped"
+        else:
+            val_rows = []
+        if not grouped_validation:
+            composite = [f"{row['level']}:{row['task']}" for row in gold_rows]
+            composite_counts = Counter(composite)
+            candidate_strata = [
+                label if composite_counts[label] >= 5 else f"{row['level']}:other"
+                for row, label in zip(gold_rows, composite, strict=True)
+            ]
+            candidate_counts = Counter(candidate_strata)
+            validation_size = max(1, int(round(len(gold_rows) * validation_ratio)))
+            gold_strata = (
+                candidate_strata
+                if min(candidate_counts.values()) >= 2 and len(candidate_counts) <= validation_size
+                else [str(row["level"]) for row in gold_rows]
+            )
+            _gold_train, val_rows = train_test_split(
+                gold_rows,
+                test_size=validation_ratio,
+                random_state=seed,
+                stratify=gold_strata,
+            )
+            val_prompts = {str(row["prompt"]).strip().lower() for row in val_rows}
+            train_rows = [row for row in rows if str(row["prompt"]).strip().lower() not in val_prompts]
+            validation_kind = "held_out_teacher_gold"
     else:
         train_rows, val_rows = train_test_split(
             rows,
@@ -540,6 +558,7 @@ def _train_impl(
         level_logits_list: list[Any] = []
         risk_true: list[int] = []
         risk_pred: list[int] = []
+        risk_pred_all: list[int] = []
         capability_true: list[list[int]] = []
         capability_pred: list[list[int]] = []
         loss_total = 0.0
@@ -558,10 +577,12 @@ def _train_impl(
                 level_pred.extend((outputs["level_logits"].argmax(dim=-1) + 1).cpu().tolist())
                 task_true.extend(batch["task_labels"].cpu().tolist())
                 task_pred.extend(outputs["task_logits"].argmax(dim=-1).cpu().tolist())
-                risk_pred.extend(outputs["risk_logits"].argmax(dim=-1).cpu().tolist())
+                batch_risk_pred = outputs["risk_logits"].argmax(dim=-1)
+                risk_pred_all.extend(batch_risk_pred.cpu().tolist())
                 gold_risk = batch["risk_weights"] >= 0.75
                 if gold_risk.any():
                     risk_true.extend(batch["risk_labels"][gold_risk].cpu().tolist())
+                    risk_pred.extend(batch_risk_pred[gold_risk].cpu().tolist())
                 gold_capability = batch["capability_weights"] >= 0.75
                 if gold_capability.any():
                     capability_true.extend(batch["capability_targets"][gold_capability].int().cpu().tolist())
@@ -602,7 +623,7 @@ def _train_impl(
             "task_true": task_true,
             "task_pred": task_pred,
             "probabilities": probability_array,
-            "risk_pred": risk_pred,
+            "risk_pred": risk_pred_all,
         }
 
     for epoch in range(completed_epochs):
